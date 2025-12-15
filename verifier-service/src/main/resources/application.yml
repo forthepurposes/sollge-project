@@ -1,0 +1,24 @@
+server:
+  port: 8088
+  error:
+    include-message: always
+    include-binding-errors: always
+
+logging:
+  level:
+    org:
+      springframework:
+        web: DEBUG
+      hibernate: ERROR
+
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVER:kafka:9092}
+  data:
+    mongodb:
+      host: ${MONGODB_HOST:mongodb}
+      port: ${MONGODB_PORT:27017}
+      database: ${MONGODB_DB:sollge}
+      uuid-representation: standard
+  application:
+    name: "verifier-service"

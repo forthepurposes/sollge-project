@@ -1,0 +1,60 @@
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+eureka:
+  instance:
+    prefer-ip-address: false
+    hostname: ${HOSTNAME}
+    instance-id: ${HOSTNAME}:${spring.application.name}:${server.port}
+  client:
+    serviceUrl:
+      defaultZone: http://${EUREKA_SERVICE_IP}/eureka/
+
+server:
+  port: ${SERVER_PORT:8081}
+  error:
+    include-message: always
+    include-binding-errors: always
+
+logging:
+  level:
+    org.springframework.web: DEBUG
+    org.hibernate: ERROR
+
+jwt:
+  ttl: 15m
+  private-key: classpath:jwt/app.key
+  public-key: classpath:jwt/app.pub
+
+spring:
+  cloud:
+    config:
+      enabled: false
+
+  application:
+    name: user-service
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    show-sql: true
+
+  flyway:
+    baseline-on-migrate: true
+    enabled: true
+    baseline-description: init
+    baseline-version: 1

@@ -1,0 +1,15 @@
+eureka:
+  instance:
+    prefer-ip-address: false
+    hostname: ${HOSTNAME}
+    instance-id: ${HOSTNAME}:${spring.application.name}:${server.port}
+  client:
+    serviceUrl:
+      defaultZone: http://${EUREKA_SERVICE_IP}/eureka/
+server:
+  port: ${PORT:8080}
+spring:
+  main:
+    web-application-type: reactive
+  application:
+    name: api-gateway

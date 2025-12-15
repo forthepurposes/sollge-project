@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: rental-service
+
+  cache:
+    type: redis
+
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS}
+
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST}
+      port: ${SPRING_DATA_REDIS_PORT}
+    mongodb:
+      host: ${MONGODB-HOST:mongodb}
+      port: ${MONGODB-PORT:27017}
+      database: ${MONGODB-DB:sollge}
+      username: ${MONGODB-USERNAME:test_user}
+      password: ${MONGODB-PASSWORD:test_password}
+      uuid-representation: standard
+      auto-index-creation: true
+
+azure:
+  storage:
+    account-name: ${AZURE_ACCOUNT_NAME}
+    account-key: ${AZURE_ACCOUNT_KEY}
+    container-name: ${AZURE_CONTAINER_NAME}
+
+server:
+  port: ${SERVER_PORT:8082}
+  error:
+    include-message: always
+    include-binding-errors: always
+
+eureka:
+  instance:
+    prefer-ip-address: false
+    hostname: ${HOSTNAME}
+    instance-id: ${HOSTNAME}:${spring.application.name}:${server.port}
+  client:
+    serviceUrl:
+      defaultZone: http://${EUREKA_SERVICE_IP}/eureka/
+
+logging:
+  level:
+    org.springframework.web: DEBUG
+    org.hibernate: ERROR

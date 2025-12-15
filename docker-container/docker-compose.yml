@@ -1,0 +1,228 @@
+version: "3.9"
+
+services:
+  mongodb:
+    image: mongo:7
+    container_name: dev-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: test_user
+      MONGO_INITDB_ROOT_PASSWORD: test_password
+      MONGO_INITDB_DATABASE: sollge
+    volumes:
+      - mongo_data:/data/db
+    command: [ "mongod", "--bind_ip_all", "--quiet" ]
+    healthcheck:
+      test: [ "CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: dev-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: [ "redis-server", "--appendonly", "no" ]
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgresql:
+    image: postgres:15
+    container_name: dev-postgresql
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: user_service
+      POSTGRES_PASSWORD: user_password
+      POSTGRES_DB: user_db
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U user_service" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    hostname: kafka
+    container_name: kafka
+    ports:
+      - "9092:9092"
+      - "9093:9093"
+    environment:
+      KAFKA_KRAFT_MODE: "true"
+      KAFKA_PROCESS_ROLES: controller,broker
+      KAFKA_NODE_ID: 1
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@localhost:9093"
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,HOST://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,HOST://localhost:29092
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: "Mk3OEYBSD34fcwNTJENDM2Qk"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./data:/var/lib/kafka/data
+
+  service-registry:
+    build:
+      context: ../service-registry
+      dockerfile: Dockerfile
+    container_name: service-registry
+    restart: unless-stopped
+    ports:
+      - "8761:8761"
+    environment:
+      SPRING_APPLICATION_NAME: service-registry
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8761/actuator/health || exit 1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  api-gateway:
+    build:
+      context: ../api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    restart: unless-stopped
+    depends_on:
+      - service-registry
+    environment:
+      SERVER_PORT: 8080
+      EUREKA_SERVICE_IP: service-registry:8761
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health || exit 1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  user-service:
+    build:
+      context: ../user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    restart: unless-stopped
+    depends_on:
+      - postgresql
+      - service-registry
+    environment:
+      SERVER_PORT: 8081
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgresql:5432/user_db
+      SPRING_DATASOURCE_USERNAME: user_service
+      SPRING_DATASOURCE_PASSWORD: user_password
+      EUREKA_SERVICE_IP: service-registry:8761
+      AWS_ACCESS_KEY: ${AWS_ACCESS_KEY}
+      AWS_SECRET_KEY: ${AWS_SECRET_KEY}
+    ports:
+      - "8081:8081"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health || exit 1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  rental-service:
+    build:
+      context: ../rental-service
+      dockerfile: Dockerfile
+    container_name: rental-service
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+      - redis
+      - kafka
+      - service-registry
+    environment:
+      POD_IP: service-registry
+      SERVER_PORT: 8082
+      SPRING_DATA_MONGODB_HOST: mongodb
+      SPRING_DATA_MONGODB_PORT: 27017
+      SPRING_DATA_MONGODB_DATABASE: sollge
+      SPRING_DATA_MONGODB_USERNAME: test_user
+      SPRING_DATA_MONGODB_PASSWORD: test_password
+      SPRING_DATA_MONGODB_AUTHENTICATION_DATABASE: admin
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      EUREKA_SERVICE_IP: service-registry:8761
+      AZURE_CONTAINER_NAME: ${AZURE_CONTAINER_NAME}
+      AZURE_ACCOUNT_NAME: ${AZURE_ACCOUNT_NAME}
+      AZURE_ACCOUNT_KEY: ${AZURE_ACCOUNT_KEY}
+    ports:
+      - "8082:8082"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8082/actuator/health || exit 1" ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  verifier-service:
+    build:
+      context: ../verifier-service
+      dockerfile: Dockerfile
+    container_name: verifier-service
+    restart: unless-stopped
+    depends_on:
+      - mongodb
+      - kafka
+      - service-registry
+    environment:
+      SERVER_PORT: 8088
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATA_MONGODB_HOST: mongodb
+      SPRING_DATA_MONGODB_PORT: 27017
+      SPRING_DATA_MONGODB_DATABASE: sollge
+      SPRING_APPLICATION_NAME: verifier-service
+      EUREKA_SERVICE_IP: service-registry:8761
+    ports:
+      - "8088:8088"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  gps-iot-device:
+    build:
+      context: ../gps-iot-device
+      dockerfile: Dockerfile
+    container_name: gps-iot-device
+    restart: unless-stopped
+    depends_on:
+      - kafka
+      - service-registry
+    environment:
+      SERVER_PORT: 8090
+      IOT_HUB_HOSTNAME: ${IOT_HUB_HOSTNAME}
+      IOT_HUB_DEVICE_ID: ${IOT_HUB_DEVICE_ID}
+      IOT_HUB_TOKEN: ${IOT_HUB_TOKEN}
+      EUREKA_SERVICE_IP: service-registry:8761
+      SPRING_APPLICATION_NAME: gps-iot-device
+    ports:
+      - "8090:8090"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  mongo_data:
+  pg_data:

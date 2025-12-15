@@ -1,0 +1,18 @@
+spring:
+  main:
+    web-application-type: none
+  application:
+    name: iot-device-simulator
+server:
+  port: ${SERVER_PORT:8082}
+  error:
+    include-message: always
+    include-binding-errors: always
+azure:
+  iot:
+    hub:
+      hostname: ${IOT_HUB_HOSTNAME}
+    device:
+      id: ${IOT_HUB_DEVICE_ID}
+    sas:
+      token: ${IOT_HUB_TOKEN}
